@@ -1,42 +1,74 @@
 type Executor<T> = (
-  resolve: (value: T) => void,
-  reject: (reason?: any) => void
+  resolve: Resolve<T>,
+  reject: Reject
 ) => void;
 
 type AnyFunction = (...args: any[]) => any;
-
+type Resolve<T> = (value: T) => void;
+type Reject = (reason?: any) => void;
+type Status = 'fulfilled' | 'rejected' | 'pending';
 class MyPromise<T> {
-  thenCb: AnyFunction | null = null;
-  catchCb: AnyFunction | null = null;
+  thenCbs: [AnyFunction, Resolve<T>][] = [];
+  catchCbs: [AnyFunction, Reject][] = [];
+  status: Status = 'pending';
+  value: T | null = null;
+  error?: any;
 
   constructor(executor: Executor<T>) {
+      console.log('CREATE INSTANCE');
       executor(this.resolve, this.reject);
   }
 
   public then = (thenCallback: (value: T) => void) => {
-      this.thenCb = thenCallback;
-      return this;
+      return new MyPromise((resolve, reject) => {
+          this.thenCbs.push([thenCallback, resolve]);
+      });
   };
 
   public catch = (catchCallback: (reason?: any) => void) => {
-      this.catchCb = catchCallback;
-      return this;
+      return new MyPromise((resolve, reject) => {
+          this.catchCbs.push([catchCallback, reject]);
+      });
   };
 
   private resolve = (value: T) => {
-      if (this.thenCb) {
-          this.thenCb(value);
-      }
+      this.status = 'fulfilled';
+      this.value = value;
+
+      this.processPipeline();
   };
 
   private reject = (reason?: any) => {
-      if (this.catchCb) {
-          this.catchCb(reason);
-      }
+      this.status = 'rejected';
+      this.error = reason;
+
+      this.processPipeline();
   };
 
   private processPipeline = () => {
+      if (this.status === 'pending') {
+          return;
+      }
 
+      if (this.status === 'fulfilled') {
+          console.log("CALLBACKS", this.thenCbs);
+          const thenCbs = this.thenCbs;
+          this.thenCbs = [];
+
+          thenCbs.forEach(([thenCb, resolve]) => {
+              const value = thenCb(this.value);
+              resolve(value);
+          })
+      } else {
+          console.log("CALLBACKS", this.catchCbs);
+          const catchCbs = this.catchCbs;
+          this.catchCbs = [];
+
+          catchCbs.forEach(([catchCb, reject]) => {
+              const value = catchCb(this.value);
+              reject(value);
+          })
+      }
   }
 }
 
@@ -50,26 +82,30 @@ const wait = (ms: number) => (
 
 const waitedPromise = new MyPromise<number>((resolve, reject) => {
     setTimeout(() => {
-        console.log('5');
         resolve(5);
-    }, 1_000);
+    }, 500);
+    // resolve(5);
 })
     .then((value) => {
         console.log("value:", value);
-        return value;
+        return 6;
+    })
+    .catch((reason) => {
+        reason();
+    })
+    .then(value => {
+        console.log('second value:', value);
+        return 4
     })
     .then((value) => {
         console.log("====", value);
     })
 
 // const waitedPromise = new Promise<number>((resolve, reject) => {
-//     setTimeout(() => {
-//         resolve(5);
-//     }, 1_000);
+//     resolve(5);
 // })
 //     .then((value) => {
 //         console.log("value:", value);
-//         return wait(5000);
 //     })
 //     .then(() => {
 //         console.log("====");
