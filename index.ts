@@ -6,8 +6,8 @@ type Executor<T> = (
 type AnyFunction = (...args: any[]) => any;
 
 class MyPromise<T> {
-  thenCb: AnyFunction[] | null = null;
-  catchCb: AnyFunction[] | null = null;
+  thenCb: AnyFunction | null = null;
+  catchCb: AnyFunction | null = null;
 
   constructor(executor: Executor<T>) {
       executor(this.resolve, this.reject);
@@ -34,6 +34,10 @@ class MyPromise<T> {
           this.catchCb(reason);
       }
   };
+
+  private processPipeline = () => {
+
+  }
 }
 
 const wait = (ms: number) => (
@@ -46,6 +50,7 @@ const wait = (ms: number) => (
 
 const waitedPromise = new MyPromise<number>((resolve, reject) => {
     setTimeout(() => {
+        console.log('5');
         resolve(5);
     }, 1_000);
 })
