@@ -189,21 +189,20 @@ MyPromise.race([
 //     .then(console.log)
 //     .catch((error) => console.log(error))
 
-// const waitedPromise = new MyPromise<number>((resolve, reject) => {
-//     resolve(5);
-// })
-//     .catch(value => {
-//
-//     })
-//     .then((value) => {
-//         console.log("value:", value);
-//     })
-//     .catch((reason) => {
-//         console.log("reason:", reason);
-//     })
-//     .then(() => {
-//         console.log("====");
-//     })
+const myPromise = new MyPromise<number>((resolve, reject) => {
+    setTimeout(() => {
+        resolve(5);
+    }, 5_000)
+})
+    .then((value) => {
+        console.log("value:", value);
+    })
+    .catch((reason) => {
+        console.log("reason:", reason);
+    })
+    .then(() => {
+        console.log("====");
+    })
 
 // output
 // reference
