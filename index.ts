@@ -1,41 +1,50 @@
+import {asap, isPromiseLike} from "./utils";
+
 type Executor<T> = (
   resolve: Resolve<T>,
   reject: Reject
 ) => void;
 
+type Callback<T> = [AnyFunction | undefined, AnyFunction | undefined, Resolve<T>, Reject];
 type AnyFunction = (...args: any[]) => any;
 type Resolve<T> = (value: T) => void;
 type Reject = (reason?: any) => void;
 type Status = 'fulfilled' | 'rejected' | 'pending';
 class MyPromise<T> {
-  thenCbs: [AnyFunction, Resolve<T>][] = [];
-  catchCbs: [AnyFunction, Reject][] = [];
+  thenCbs: Callback<T>[] = [];
   status: Status = 'pending';
   value: T | null = null;
   error?: any;
 
   constructor(executor: Executor<T>) {
-      console.log('CREATE INSTANCE');
-      executor(this.resolve, this.reject);
+      try {
+          executor(this.resolve, this.reject);
+      } catch (error) {
+          this.reject(error);
+      }
   }
 
-  public then = (thenCallback: (value: T) => void) => {
+  public then = (thenCallback: (value: T) => void, catchCallback?: (reason?: any) => void) => {
       return new MyPromise((resolve, reject) => {
-          this.thenCbs.push([thenCallback, resolve]);
+          this.thenCbs.push([thenCallback, catchCallback, resolve, reject]);
       });
   };
 
   public catch = (catchCallback: (reason?: any) => void) => {
       return new MyPromise((resolve, reject) => {
-          this.catchCbs.push([catchCallback, reject]);
+          this.thenCbs.push([undefined, catchCallback, resolve, reject]);
       });
   };
 
-  private resolve = (value: T) => {
-      this.status = 'fulfilled';
-      this.value = value;
+  private resolve = (value: T | PromiseLike<T>) => {
+      if (isPromiseLike(value)) {
+          value.then(this.resolve, this.reject);
+      } else {
+          this.status = 'fulfilled';
+          this.value = value;
 
-      this.processPipeline();
+          this.processPipeline();
+      }
   };
 
   private reject = (reason?: any) => {
@@ -46,60 +55,43 @@ class MyPromise<T> {
   };
 
   private processPipeline = () => {
-      if (this.status === 'pending') {
-          return;
-      }
+      asap(() => {
+          if (this.status === 'pending') {
+              return;
+          }
 
-      if (this.status === 'fulfilled') {
-          console.log("CALLBACKS", this.thenCbs);
           const thenCbs = this.thenCbs;
           this.thenCbs = [];
-
-          thenCbs.forEach(([thenCb, resolve]) => {
-              const value = thenCb(this.value);
-              resolve(value);
+          thenCbs.forEach(([thenCb, catchCb, resolve, reject]) => {
+              try {
+                  if (this.status === 'fulfilled') {
+                      const value = thenCb ? thenCb(this.value) : this.value;
+                      resolve(value);
+                  } else {
+                      const reason = catchCb ? catchCb(this.error) : this.error;
+                      resolve(reason);
+                  }
+              } catch (error) {
+                  reject(error);
+              }
           })
-      } else {
-          console.log("CALLBACKS", this.catchCbs);
-          const catchCbs = this.catchCbs;
-          this.catchCbs = [];
-
-          catchCbs.forEach(([catchCb, reject]) => {
-              const value = catchCb(this.value);
-              reject(value);
-          })
-      }
+      })
   }
 }
 
-const wait = (ms: number) => (
-    new Promise<void>(resolve => {
-        setTimeout(() => {
-            resolve();
-        }, ms);
-    })
-)
+// const wait = (ms: number) => (
+//     new MyPromise<void>(resolve => {
+//         setTimeout(() => {
+//             resolve();
+//         }, ms);
+//     })
+// )
 
-const waitedPromise = new MyPromise<number>((resolve, reject) => {
-    setTimeout(() => {
-        resolve(5);
-    }, 500);
-    // resolve(5);
-})
-    .then((value) => {
-        console.log("value:", value);
-        return 6;
-    })
-    .catch((reason) => {
-        reason();
-    })
-    .then(value => {
-        console.log('second value:', value);
-        return 4
-    })
-    .then((value) => {
-        console.log("====", value);
-    })
+new MyPromise((resolve, reject) => {
+    resolve("SECOND");
+}).then(console.log)
+
+console.log('FIRST')
 
 // const waitedPromise = new Promise<number>((resolve, reject) => {
 //     resolve(5);
